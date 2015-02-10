@@ -491,8 +491,13 @@ static inline int is_psk_supported(dtls_context_t *ctx)
 static inline int is_ecdsa_supported(dtls_context_t *ctx, int is_client)
 {
 #ifdef DTLS_ECC
+#ifndef DTLS_X509
   return ctx && ctx->h && ((!is_client && ctx->h->get_ecdsa_key) || 
 			   (is_client && ctx->h->verify_ecdsa_key));
+#else
+  return ctx && ctx->h && ((!is_client && ctx->h->get_ecdsa_key) || 
+			   (is_client && ctx->h->verify_ecdsa_cert));
+#endif
 #else
   return 0;
 #endif /* DTLS_ECC */
@@ -503,7 +508,11 @@ static inline int is_ecdsa_supported(dtls_context_t *ctx, int is_client)
 static inline int is_ecdsa_client_auth_supported(dtls_context_t *ctx)
 {
 #ifdef DTLS_ECC
+#ifndef DTLS_X509
   return ctx && ctx->h && ctx->h->get_ecdsa_key && ctx->h->verify_ecdsa_key;
+#else
+  return ctx && ctx->h && ctx->h->get_ecdsa_key && ctx->h->verify_ecdsa_cert;
+#endif
 #else
   return 0;
 #endif /* DTLS_ECC */
@@ -738,7 +747,11 @@ static int verify_ext_cert_type(uint8 *data, size_t data_length) {
     cert_type = dtls_uint8_to_int(data);
     data += sizeof(uint8);
 
+#ifndef DTLS_X509
     if (cert_type == TLS_CERT_TYPE_RAW_PUBLIC_KEY)
+#else
+    if (cert_type == TLS_CERT_TYPE_X509)
+#endif
       return 0;
   }
 
@@ -830,7 +843,11 @@ dtls_check_tls_extension(dtls_peer_t *peer,
 	  if (verify_ext_cert_type(data, j))
             goto error;
         } else {
+#ifndef DTLS_X509
 	  if (dtls_uint8_to_int(data) != TLS_CERT_TYPE_RAW_PUBLIC_KEY)
+#else
+	  if (dtls_uint8_to_int(data) != TLS_CERT_TYPE_X509)
+#endif
 	    goto error;
         }
         break;
@@ -840,7 +857,11 @@ dtls_check_tls_extension(dtls_peer_t *peer,
 	  if (verify_ext_cert_type(data, j))
             goto error;
         } else {
+#ifndef DTLS_X509
 	  if (dtls_uint8_to_int(data) != TLS_CERT_TYPE_RAW_PUBLIC_KEY)
+#else
+	  if (dtls_uint8_to_int(data) != TLS_CERT_TYPE_X509)
+#endif
 	    goto error;
         }
         break;
@@ -1791,7 +1812,11 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
     dtls_int_to_uint16(p, 1);
     p += sizeof(uint16);
 
+#ifndef DTLS_X509
     dtls_int_to_uint8(p, TLS_CERT_TYPE_RAW_PUBLIC_KEY);
+#else
+    dtls_int_to_uint8(p, TLS_CERT_TYPE_X509);
+#endif
     p += sizeof(uint8);
 
     /* client certificate type extension */
@@ -1802,7 +1827,11 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
     dtls_int_to_uint16(p, 1);
     p += sizeof(uint16);
 
+#ifndef DTLS_X509
     dtls_int_to_uint8(p, TLS_CERT_TYPE_RAW_PUBLIC_KEY);
+#else
+    dtls_int_to_uint8(p, TLS_CERT_TYPE_X509);
+#endif
     p += sizeof(uint8);
 
     /* ec_point_formats */
@@ -1830,6 +1859,7 @@ dtls_send_server_hello(dtls_context_t *ctx, dtls_peer_t *peer)
 }
 
 #ifdef DTLS_ECC
+#ifndef DTLS_X509
 static int
 dtls_send_certificate_ecdsa(dtls_context_t *ctx, dtls_peer_t *peer,
 			    const dtls_ecdsa_key_t *key)
@@ -1862,6 +1892,44 @@ dtls_send_certificate_ecdsa(dtls_context_t *ctx, dtls_peer_t *peer,
   return dtls_send_handshake_msg(ctx, peer, DTLS_HT_CERTIFICATE,
 				 buf, p - buf);
 }
+#else
+static int
+dtls_send_certificate_ecdsa(dtls_context_t *ctx, dtls_peer_t *peer,
+			    const dtls_ecdsa_key_t *key)
+{
+  uint8 buf[300];
+  uint8 *p;
+  int ret;
+  unsigned char *cert;
+  size_t cert_size;
+
+  ret = CALL(ctx, get_ecdsa_cert, &peer->session,
+	     &cert, &cert_size);
+  if (ret < 0) {
+    dtls_alert_fatal_create(DTLS_ALERT_HANDSHAKE_FAILURE);
+    return ret;
+  }
+
+  /* Certificate
+   *
+   * Start message construction at beginning of buffer. */
+  p = buf;
+
+  dtls_int_to_uint24(p, cert_size + 3);	/* certificates length */
+  p += sizeof(uint24);
+
+  dtls_int_to_uint24(p, cert_size);	/* length of this certificate */
+  p += sizeof(uint24);
+
+  memcpy(p, cert, cert_size);
+  p += cert_size;
+
+  assert(p - buf <= sizeof(buf));
+
+  return dtls_send_handshake_msg(ctx, peer, DTLS_HT_CERTIFICATE,
+				 buf, p - buf);
+}
+#endif
 
 static uint8 *
 dtls_add_ecdsa_signature_elem(uint8 *p, uint32_t *point_r, uint32_t *point_s)
@@ -2397,7 +2465,11 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
     dtls_int_to_uint8(p, 1);
     p += sizeof(uint8);
 
+#ifndef DTLS_X509
     dtls_int_to_uint8(p, TLS_CERT_TYPE_RAW_PUBLIC_KEY);
+#else
+    dtls_int_to_uint8(p, TLS_CERT_TYPE_X509);
+#endif
     p += sizeof(uint8);
 
     /* client certificate type extension */
@@ -2412,7 +2484,11 @@ dtls_send_client_hello(dtls_context_t *ctx, dtls_peer_t *peer,
     dtls_int_to_uint8(p, 1);
     p += sizeof(uint8);
 
+#ifndef DTLS_X509
     dtls_int_to_uint8(p, TLS_CERT_TYPE_RAW_PUBLIC_KEY);
+#else
+    dtls_int_to_uint8(p, TLS_CERT_TYPE_X509);
+#endif
     p += sizeof(uint8);
 
     /* elliptic_curves */
@@ -2548,6 +2624,7 @@ check_server_hello_verify_request(dtls_context_t *ctx,
 }
 
 #ifdef DTLS_ECC
+#ifndef DTLS_X509
 static int
 check_server_certificate(dtls_context_t *ctx, 
 			 dtls_peer_t *peer,
@@ -2599,6 +2676,155 @@ check_server_certificate(dtls_context_t *ctx,
 
   return 0;
 }
+
+#else
+
+static int
+dtls_check_cert_signature_elem(uint8 *data, size_t data_length,
+				unsigned char **result_r,
+				unsigned char **result_s)
+{
+  int i;
+  uint8 *data_end = data + data_length;
+
+  if (data_length < 87) {
+    dtls_alert("no signature found in certificate\n");
+    return dtls_alert_fatal_create(DTLS_ALERT_BAD_CERTIFICATE);
+  }
+
+  data = data_end - DTLS_EC_KEY_SIZE;
+
+  *result_s = data;
+
+  data -= sizeof(uint8);
+  i = dtls_uint8_to_int(data);
+  if (i == 0)
+    data -= sizeof(uint8);
+  data -= sizeof(uint8) + DTLS_EC_KEY_SIZE;
+
+  *result_r = data;
+
+  data -= sizeof(uint8);
+  i = dtls_uint8_to_int(data);
+  if (i == 0)
+    data -= sizeof(uint8);
+  data -= 6 * sizeof(uint8);
+
+  static const unsigned char sign_type[] = { 
+    0x30, 0x0A, 0x06, 0x08, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x04, 0x03, 0x02 // ecdsaWithSHA256
+  };
+
+  data -= sizeof(sign_type);
+  if (memcmp(data, sign_type, sizeof(sign_type)) != 0) {
+    dtls_alert("unknown signature type\n");
+    return dtls_alert_fatal_create(DTLS_ALERT_BAD_CERTIFICATE);
+  }
+
+  return data_end - data;
+}
+
+static int
+check_server_certificate(dtls_context_t *ctx, 
+			 dtls_peer_t *peer,
+			 uint8 *data, size_t data_length)
+{
+  int ret;
+  dtls_handshake_parameters_t *config = peer->handshake_params;
+  int cert_length;
+  unsigned char *result_r;
+  unsigned char *result_s;
+  dtls_hash_ctx hs_hash;
+  unsigned char sha256hash[DTLS_HMAC_DIGEST_SIZE];
+  const unsigned char *ca_pub_x;
+  const unsigned char *ca_pub_y;
+  size_t signature_size;
+
+  update_hs_hash(peer, data, data_length);
+
+  assert(is_tls_ecdhe_ecdsa_with_aes_128_ccm_8(config->cipher));
+
+  data += DTLS_HS_LENGTH;
+
+  if (dtls_uint24_to_int(data) > 512) {
+    dtls_alert("expect length of <512 bytes for server certificate message\n");
+    return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
+  }
+  data += sizeof(uint24);
+
+  cert_length = dtls_uint24_to_int(data);
+  if (cert_length >= 512 || cert_length < 256) {
+    dtls_alert("expect length of >256 and <512 bytes for certificate\n");
+    return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
+  }
+  data += sizeof(uint24);
+
+  ret = dtls_check_cert_signature_elem(data, (size_t)cert_length, &result_r, &result_s);
+  if (ret < 0) {
+    return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
+  }
+  signature_size = (size_t)ret;
+
+  ret = CALL(ctx, get_ecdsa_ca, &peer->session,
+	     &ca_pub_x, &ca_pub_y);
+  if (ret < 0) {
+    dtls_warn("Unable to get CA certificate\n");
+    return ret;
+  }
+
+  if (dtls_uint8_to_int(data) != 0x30) {
+    dtls_alert("SEQUENCE expected\n");
+    return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
+  }
+  data += sizeof(uint8);
+  cert_length -= sizeof(uint8);
+
+  if (dtls_uint8_to_int(data) != 0x82) {
+    dtls_alert("invalid SEQUENCE length\n");
+    return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
+  }
+  data += sizeof(uint8) + sizeof(uint16);
+  cert_length -= sizeof(uint8) + sizeof(uint16);
+
+  if (cert_length < (signature_size + DTLS_EC_KEY_SIZE*2)) {
+    dtls_alert("invalid certificate size\n");
+    return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
+  }
+  cert_length -= signature_size;
+
+  dtls_hash_init(&hs_hash);
+  dtls_hash_update(&hs_hash, data, cert_length);
+  dtls_hash_finalize(sha256hash, &hs_hash);
+
+  ret = dtls_ecdsa_verify_sig_hash(ca_pub_x, ca_pub_y,
+			    DTLS_EC_KEY_SIZE,
+			    sha256hash, sizeof(sha256hash),
+			    result_r, result_s);
+
+  if (ret < 0) {
+    dtls_alert("wrong certificate signature err: %i\n", ret);
+    return dtls_alert_fatal_create(DTLS_ALERT_BAD_CERTIFICATE);
+  }
+
+  ret = CALL(ctx, verify_ecdsa_cert, &peer->session,
+	     data, cert_length);
+  if (ret < 0) {
+    dtls_warn("The certificate was not accepted\n");
+    return ret;
+  }
+
+  data += (cert_length - DTLS_EC_KEY_SIZE * 2);
+
+  memcpy(config->keyx.ecdsa.other_pub_x, data,
+	 sizeof(config->keyx.ecdsa.other_pub_x));
+  data += sizeof(config->keyx.ecdsa.other_pub_x);
+
+  memcpy(config->keyx.ecdsa.other_pub_y, data,
+	 sizeof(config->keyx.ecdsa.other_pub_y));
+  data += sizeof(config->keyx.ecdsa.other_pub_y);
+
+  return 0;
+}
+#endif
 
 static int
 check_server_key_exchange_ecdsa(dtls_context_t *ctx,
@@ -2935,7 +3161,7 @@ decrypt_verify(dtls_peer_t *peer, uint8 *packet, size_t length,
       dtls_warn("decryption failed\n");
     else {
 #ifndef NDEBUG
-      printf("decrypt_verify(): found %i bytes cleartext\n", clen);
+      PRINTF("decrypt_verify(): found %i bytes cleartext\n", clen);
 #endif
       dtls_security_params_free_other(peer);
       dtls_debug_dump("cleartext", *cleartext, clen);
@@ -3718,6 +3944,11 @@ dtls_handle_message(dtls_context_t *ctx,
       dtls_info("** application data:\n");
       if (!peer) {
         dtls_warn("no peer available, send an alert\n");
+
+        peer = dtls_new_peer(session);
+        dtls_send_alert(ctx, peer, DTLS_ALERT_LEVEL_FATAL, DTLS_ALERT_CLOSE_NOTIFY);
+        dtls_free_peer(peer);
+
         // TODO: should we send a alert here?
         return -1;
       }

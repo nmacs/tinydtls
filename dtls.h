@@ -185,6 +185,7 @@ typedef struct {
 		       const session_t *session,
 		       const dtls_ecdsa_key_t **result);
 
+#ifndef DTLS_X509
   /**
    * Called during handshake to check the peer's pubic key in this
    * session. If the public key matches the session and should be
@@ -216,6 +217,22 @@ typedef struct {
 			  const unsigned char *other_pub_x,
 			  const unsigned char *other_pub_y,
 			  size_t key_size);
+#else
+  int (*get_ecdsa_cert)(struct dtls_context_t *ctx, 
+			const session_t *session,
+			const unsigned char **cert,
+			size_t *cert_size);
+
+  int (*get_ecdsa_ca)(struct dtls_context_t *ctx,
+		      const session_t *session,
+		      const unsigned char **ca_pub_x,
+		      const unsigned char **ca_pub_y);
+
+  int (*verify_ecdsa_cert)(struct dtls_context_t *ctx,
+			   const session_t *session,
+			   const unsigned char *cert,
+			   size_t cert_size);
+#endif /* DTLS_X509 */
 #endif /* DTLS_ECC */
 } dtls_handler_t;
 

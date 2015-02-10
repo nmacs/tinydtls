@@ -89,7 +89,9 @@ typedef enum {
 #define TLS_EXT_SERVER_CERTIFICATE_TYPE	20 /* see RFC 7250 */
 #define TLS_EXT_ENCRYPT_THEN_MAC	22 /* see RFC 7366 */
 
+/* see http://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml#tls-extensiontype-values-3 */
 #define TLS_CERT_TYPE_RAW_PUBLIC_KEY	2 /* see RFC 7250 */
+#define TLS_CERT_TYPE_X509		0 /* see RFC 7250 */
 
 #define TLS_EXT_ELLIPTIC_CURVES_SECP256R1	23 /* see RFC 4492 */
 

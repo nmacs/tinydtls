@@ -45,6 +45,8 @@ static dtls_str output_file = { 0, NULL }; /* output file name */
 static dtls_context_t *dtls_context = NULL;
 
 
+#ifndef DTLS_X509
+
 static const unsigned char ecdsa_priv_key[] = {
 			0x41, 0xC1, 0xCB, 0x6B, 0x51, 0x24, 0x7A, 0x14,
 			0x43, 0x21, 0x43, 0x5B, 0x7A, 0x80, 0xE7, 0x14,
@@ -62,6 +64,20 @@ static const unsigned char ecdsa_pub_key_y[] = {
 			0x5A, 0x3C, 0x78, 0x69, 0x35, 0xA7, 0xCF, 0xAB,
 			0xE9, 0x3F, 0x98, 0x72, 0x09, 0xDA, 0xED, 0x0B,
 			0x4F, 0xAB, 0xC3, 0x6F, 0xC7, 0x72, 0xF8, 0x29};
+
+#else
+
+static const unsigned char ecdsa_ca_pub_x[] = {
+	0xff, 0x5d, 0x3e, 0xc6, 0x40, 0x7f, 0x27, 0x5d, 0x1a, 0x12, 0x91, 0x54, 0x0c, 0x9c, 0x06, 0x7d,
+	0xf9, 0xa5, 0x23, 0x82, 0x8c, 0x2e, 0xeb, 0x3b, 0x23, 0xe9, 0x8b, 0x7c, 0xf0, 0x15, 0xc3, 0x80
+};
+
+static const unsigned char ecdsa_ca_pub_y[] = {
+	0x4c, 0x38, 0x41, 0x37, 0x70, 0xc4, 0x13, 0x1a, 0x30, 0x8c, 0xcc, 0x4a, 0x6b, 0x78, 0xc3, 0x25,
+	0xec, 0x00, 0x91, 0xd3, 0xc2, 0x88, 0x18, 0x20, 0xfd, 0xcc, 0x41, 0x9c, 0x39, 0x92, 0x28, 0x74
+};
+
+#endif
 
 #ifdef DTLS_PSK
 ssize_t
@@ -141,6 +157,7 @@ get_psk_info(struct dtls_context_t *ctx UNUSED_PARAM,
 #endif /* DTLS_PSK */
 
 #ifdef DTLS_ECC
+#ifndef DTLS_X509
 static int
 get_ecdsa_key(struct dtls_context_t *ctx,
 	      const session_t *session,
@@ -164,6 +181,24 @@ verify_ecdsa_key(struct dtls_context_t *ctx,
 		 size_t key_size) {
   return 0;
 }
+#else
+
+static int dtls_get_ecdsa_ca(struct dtls_context_t *ctx, const session_t *session,
+                             const unsigned char **ca_pub_x, const unsigned char **ca_pub_y)
+{
+	*ca_pub_x = ecdsa_ca_pub_x;
+	*ca_pub_y = ecdsa_ca_pub_y;
+
+	return 0;
+}
+
+static int dtls_verify_ecdsa_cert(struct dtls_context_t *ctx, const session_t *session,
+                                  const unsigned char *cert, size_t cert_size)
+{
+  return 0;
+}
+
+#endif
 #endif /* DTLS_ECC */
 
 static void
@@ -178,16 +213,22 @@ try_send(struct dtls_context_t *ctx, session_t *dst) {
 
 static void
 handle_stdin() {
-  if (fgets(buf + len, sizeof(buf) - len, stdin))
-    len += strlen(buf + len);
+  int ret;
+
+  ret = read(fileno(stdin), buf + len, sizeof(buf) - len);
+  if (ret > 0)
+    len += ret;
+  //if (fgets(buf + len, sizeof(buf) - len, stdin))
+    //len += strlen(buf + len);
 }
 
 static int
 read_from_peer(struct dtls_context_t *ctx, 
 	       session_t *session, uint8 *data, size_t len) {
-  size_t i;
-  for (i = 0; i < len; i++)
-    printf("%c", data[i]);
+  write(fileno(stdout), data, len);
+  //size_t i;
+  //for (i = 0; i < len; i++)
+  //  printf("%c", data[i]);
   return 0;
 }
 
@@ -313,8 +354,13 @@ static dtls_handler_t cb = {
   .get_psk_info = get_psk_info,
 #endif /* DTLS_PSK */
 #ifdef DTLS_ECC
+#ifndef DTLS_X509
   .get_ecdsa_key = get_ecdsa_key,
   .verify_ecdsa_key = verify_ecdsa_key
+#else
+  .get_ecdsa_ca = dtls_get_ecdsa_ca,
+  .verify_ecdsa_cert = dtls_verify_ecdsa_cert
+#endif
 #endif /* DTLS_ECC */
 };
 
