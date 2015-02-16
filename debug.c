@@ -226,7 +226,7 @@ dsrv_log(log_t level, char *format, ...) {
   va_end(ap);
   fflush(log_fd);
 }
-#elif defined (HAVE_VPRINTF) /* WITH_CONTIKI */
+#elif defined (HAVE_VPRINTF) || defined (__nuttx__) /* WITH_CONTIKI */
 void 
 dsrv_log(log_t level, char *format, ...) {
   static char timebuf[32];

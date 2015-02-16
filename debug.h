@@ -41,7 +41,7 @@
 #ifdef CONTIKI_TARGET_MBXXX
 extern char __Stack_Init, _estack;
 
-static inline void check_stack() {
+static inline void check_stack(void) {
   const char *p = &__Stack_Init;
   while (p < &_estack && *p == 0x38) {
     p++;
@@ -50,13 +50,13 @@ static inline void check_stack() {
   PRINTF("Stack: %d bytes used (%d free)\n", &_estack - p, p - &__Stack_Init);
 }
 #else /* CONTIKI_TARGET_MBXXX */
-static inline void check_stack() {
+static inline void check_stack(void) {
 }
 #endif /* CONTIKI_TARGET_MBXXX */
 #else /* WITH_CONTKI */
 #define PRINTF(...)
 
-static inline void check_stack() {
+static inline void check_stack(void) {
 }
 #endif
 
@@ -68,14 +68,14 @@ typedef enum { DTLS_LOG_EMERG=0, DTLS_LOG_ALERT, DTLS_LOG_CRIT, DTLS_LOG_WARN,
 } log_t;
 
 /** Returns a zero-terminated string with the name of this library. */
-const char *dtls_package_name();
+const char *dtls_package_name(void);
 
 /** Returns a zero-terminated string with the library version. */
-const char *dtls_package_version();
+const char *dtls_package_version(void);
 
 #ifndef NDEBUG
 /** Returns the current log level. */
-log_t dtls_get_log_level();
+log_t dtls_get_log_level(void);
 
 /** Sets the log level to the specified value. */
 void dtls_set_log_level(log_t level);
@@ -84,7 +84,7 @@ void dtls_set_log_level(log_t level);
  * Writes the given text to \c stdout. The text is output only when \p
  * level is below or equal to the log level that set by
  * set_log_level(). */
-#ifdef HAVE_VPRINTF
+#if defined(HAVE_VPRINTF) || defined(__nuttx__)
 void dsrv_log(log_t level, char *format, ...);
 #else
 #define dsrv_log(level, format, ...) PRINTF(format, ##__VA_ARGS__)
