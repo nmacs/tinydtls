@@ -3972,7 +3972,7 @@ dtls_new_context(void *app_data) {
   dtls_context_t *c;
   dtls_tick_t now;
 #ifndef WITH_CONTIKI
-  FILE *urandom = fopen("/dev/urandom", "r");
+  FILE *urandom = fopen("/dev/random", "r");
   unsigned char buf[sizeof(unsigned long)];
 #endif /* WITH_CONTIKI */
 
