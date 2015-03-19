@@ -43,6 +43,11 @@ install := cp
 
 # files and flags
 SOURCES:= dtls.c crypto.c ccm.c hmac.c netq.c peer.c dtls_time.c session.c
+
+ifneq ("@DTLS_X509@", "1")
+SOURCES+= x509.c asn1.c
+endif
+
 ifneq ("@NDEBUG@", "1")
 SOURCES += debug.c
 endif

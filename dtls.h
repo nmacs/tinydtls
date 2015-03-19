@@ -129,6 +129,8 @@ typedef struct {
   int (*event)(struct dtls_context_t *ctx, session_t *session, 
 		dtls_alert_level_t level, unsigned short code);
 
+  int (*keep_peer)(struct dtls_context_t *ctx, const session_t *session);
+
 #ifdef DTLS_PSK
   /**
    * Called during handshake to get information related to the
@@ -223,15 +225,11 @@ typedef struct {
 			const unsigned char **cert,
 			size_t *cert_size);
 
-  int (*get_ecdsa_ca)(struct dtls_context_t *ctx,
-		      const session_t *session,
-		      const unsigned char **ca_pub_x,
-		      const unsigned char **ca_pub_y);
-
   int (*verify_ecdsa_cert)(struct dtls_context_t *ctx,
 			   const session_t *session,
-			   const unsigned char *cert,
-			   size_t cert_size);
+			   const struct dtls_peer_t *cert,
+			   const unsigned char **ca_pub_x,
+			   const unsigned char **ca_pub_y);
 #endif /* DTLS_X509 */
 #endif /* DTLS_ECC */
 } dtls_handler_t;

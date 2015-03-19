@@ -44,9 +44,13 @@
 #include "uthash.h"
 #endif /* WITH_CONTIKI */
 
+#ifdef DTLS_X509
+#include "x509.h"
+#endif /* DTLS_X509 */
+
 typedef enum { DTLS_CLIENT=0, DTLS_SERVER } dtls_peer_type;
 
-/** 
+/**
  * Holds security parameters, local state and the transport address
  * for each peer. */
 typedef struct dtls_peer_t {
@@ -63,6 +67,11 @@ typedef struct dtls_peer_t {
 
   dtls_security_parameters_t *security_params[2];
   dtls_handshake_parameters_t *handshake_params;
+
+#ifdef DTLS_X509
+  struct dtls_x509_t cert;
+#endif
+
 } dtls_peer_t;
 
 static inline dtls_security_parameters_t *dtls_security_params_epoch(dtls_peer_t *peer, uint16_t epoch)

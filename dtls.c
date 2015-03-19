@@ -2738,6 +2738,7 @@ check_server_certificate(dtls_context_t *ctx,
   const unsigned char *ca_pub_x;
   const unsigned char *ca_pub_y;
   size_t signature_size;
+	struct dtls_x509_t *cert = &peer->cert;
 
   update_hs_hash(peer, data, data_length);
 
@@ -2764,63 +2765,42 @@ check_server_certificate(dtls_context_t *ctx,
   }
   signature_size = (size_t)ret;
 
-  ret = CALL(ctx, get_ecdsa_ca, &peer->session,
-	     &ca_pub_x, &ca_pub_y);
+  ret = dtls_x509_parse(cert, data, &cert_length);
   if (ret < 0) {
-    dtls_warn("Unable to get CA certificate\n");
-    return ret;
+    dtls_alert("wrong certificate: %i\n", ret);
+    return dtls_alert_fatal_create(DTLS_ALERT_BAD_CERTIFICATE);
   }
 
-  if (dtls_uint8_to_int(data) != 0x30) {
-    dtls_alert("SEQUENCE expected\n");
-    return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
-  }
-  data += sizeof(uint8);
-  cert_length -= sizeof(uint8);
-
-  if (dtls_uint8_to_int(data) != 0x82) {
-    dtls_alert("invalid SEQUENCE length\n");
-    return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
-  }
-  data += sizeof(uint8) + sizeof(uint16);
-  cert_length -= sizeof(uint8) + sizeof(uint16);
-
-  if (cert_length < (signature_size + DTLS_EC_KEY_SIZE*2)) {
-    dtls_alert("invalid certificate size\n");
-    return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
-  }
-  cert_length -= signature_size;
+#if 0
+  dtls_x509_print(&peer->cert);
+#endif
 
   dtls_hash_init(&hs_hash);
-  dtls_hash_update(&hs_hash, data, cert_length);
+  dtls_hash_update(&hs_hash, data + cert->begin_tbs, cert->end_tbs - cert->begin_tbs);
   dtls_hash_finalize(sha256hash, &hs_hash);
 
-  ret = dtls_ecdsa_verify_sig_hash(ca_pub_x, ca_pub_y,
-			    DTLS_EC_KEY_SIZE,
-			    sha256hash, sizeof(sha256hash),
-			    result_r, result_s);
-
+  ret = CALL(ctx, verify_ecdsa_cert, &peer->session,
+             cert, &ca_pub_x, &ca_pub_y);
   if (ret < 0) {
+    dtls_warn("The certificate was not accepted\n");
+    return dtls_alert_fatal_create(DTLS_ALERT_BAD_CERTIFICATE);
+  }
+
+  ret = dtls_ecdsa_verify_sig_hash(ca_pub_x, ca_pub_y,
+	    DTLS_EC_KEY_SIZE,
+	    sha256hash, sizeof(sha256hash),
+	    result_r, result_s);
+
+	if (ret < 0) {
     dtls_alert("wrong certificate signature err: %i\n", ret);
     return dtls_alert_fatal_create(DTLS_ALERT_BAD_CERTIFICATE);
   }
 
-  ret = CALL(ctx, verify_ecdsa_cert, &peer->session,
-	     data, cert_length);
-  if (ret < 0) {
-    dtls_warn("The certificate was not accepted\n");
-    return ret;
-  }
+  memcpy(config->keyx.ecdsa.other_pub_x, cert->pub_x,
+         sizeof(config->keyx.ecdsa.other_pub_x));
 
-  data += (cert_length - DTLS_EC_KEY_SIZE * 2);
-
-  memcpy(config->keyx.ecdsa.other_pub_x, data,
-	 sizeof(config->keyx.ecdsa.other_pub_x));
-  data += sizeof(config->keyx.ecdsa.other_pub_x);
-
-  memcpy(config->keyx.ecdsa.other_pub_y, data,
-	 sizeof(config->keyx.ecdsa.other_pub_y));
-  data += sizeof(config->keyx.ecdsa.other_pub_y);
+  memcpy(config->keyx.ecdsa.other_pub_y, cert->pub_y,
+         sizeof(config->keyx.ecdsa.other_pub_y));
 
   return 0;
 }
@@ -3280,6 +3260,7 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
         (role == DTLS_SERVER && state != DTLS_STATE_WAIT_CLIENTCERTIFICATE)) {
       return dtls_alert_fatal_create(DTLS_ALERT_UNEXPECTED_MESSAGE);
     }
+
     err = check_server_certificate(ctx, peer, data, data_length);
     if (err < 0) {
       dtls_warn("error in check_server_certificate err: %i\n", err);
