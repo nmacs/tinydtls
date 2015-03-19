@@ -33,6 +33,8 @@
 
 #undef FULL_UNROLL
 
+#ifndef DTLS_CRYPTODEV
+
 /*
 Te0[x] = S [x].[02, 01, 01, 03];
 Te1[x] = S [x].[03, 02, 01, 01];
@@ -1229,10 +1231,13 @@ rijndaelDecrypt(const aes_u32 rk[/*4*(Nr + 1)*/], int Nr, const aes_u8 ct[16],
 }
 #endif
 
+#endif /* DTLS_CRYPTODEV */
+
 /* setup key context for encryption only */
 int
 rijndael_set_key_enc_only(rijndael_ctx *ctx, const u_char *key, int bits)
 {
+#ifndef DTLS_CRYPTODEV
 	int rounds;
 
 	rounds = rijndaelKeySetupEnc(ctx->ek, key, bits);
@@ -1240,6 +1245,15 @@ rijndael_set_key_enc_only(rijndael_ctx *ctx, const u_char *key, int bits)
 		return -1;
 
 	ctx->Nr = rounds;
+#else
+	if (bits > AES_MAXKEYBITS)
+		return -1;
+
+	memcpy(ctx->key, key, bits / 8);
+	ctx->ses.key = ctx->key;
+	ctx->ses.keylen = bits / 8;
+#endif
+
 #ifdef WITH_AES_DECRYPT
 	ctx->enc_only = 1;
 #endif
@@ -1252,6 +1266,7 @@ rijndael_set_key_enc_only(rijndael_ctx *ctx, const u_char *key, int bits)
 int
 rijndael_set_key(rijndael_ctx *ctx, const u_char *key, int bits)
 {
+#ifndef DTLS_CRYPTODEV
 	int rounds;
 
 	rounds = rijndaelKeySetupEnc(ctx->ek, key, bits);
@@ -1261,6 +1276,14 @@ rijndael_set_key(rijndael_ctx *ctx, const u_char *key, int bits)
 		return -1;
 
 	ctx->Nr = rounds;
+#else
+	if (bits > AES_MAXKEYBITS)
+		return -1;
+
+	memcpy(ctx->key, key, bits / 8);
+	ctx->ses.key = ctx->key;
+	ctx->ses.keylen = bits / 8;
+#endif
 	ctx->enc_only = 0;
 
 	return 0;
@@ -1269,12 +1292,33 @@ rijndael_set_key(rijndael_ctx *ctx, const u_char *key, int bits)
 void
 rijndael_decrypt(rijndael_ctx *ctx, const u_char *src, u_char *dst)
 {
+#ifndef DTLS_CRYPTODEV
 	rijndaelDecrypt(ctx->dk, ctx->Nr, src, dst);
+#else
+	ctx->op.ses = ctx->ses.ses;
+	ctx->op.src = (caddr_t)src;
+	ctx->op.dst = (caddr_t)dst;
+	ctx->op.len = 16;
+	ctx->op.iv  = 0;
+	ctx->op.op  = COP_DECRYPT;
+	ioctl(ctx->cryptodev, CIOCCRYPT, (unsigned long)&ctx->op);
+#endif
 }
 #endif
 
 void
 rijndael_encrypt(rijndael_ctx *ctx, const u_char *src, u_char *dst)
 {
+#ifndef DTLS_CRYPTODEV
 	rijndaelEncrypt(ctx->ek, ctx->Nr, src, dst);
+#else
+	int ret;
+	ctx->op.ses = ctx->ses.ses;
+	ctx->op.src = (caddr_t)src;
+	ctx->op.dst = (caddr_t)dst;
+	ctx->op.len = 16;
+	ctx->op.iv  = 0;
+	ctx->op.op  = COP_ENCRYPT;
+	ret = ioctl(ctx->cryptodev, CIOCCRYPT, (unsigned long)&ctx->op);
+#endif
 }

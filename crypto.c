@@ -25,6 +25,7 @@
  */
 
 #include <stdio.h>
+#include <fcntl.h>
 
 #include "tinydtls.h"
 #include "dtls_config.h"
@@ -75,6 +76,11 @@ static void dtls_cipher_context_release(void)
 #ifndef WITH_CONTIKI
 void crypto_init()
 {
+#ifdef DTLS_CRYPTODEV
+  cipher_context.data.ctx.cryptodev = open("/dev/crypto", O_RDWR);
+  cipher_context.data.ctx.ses.cipher = CRYPTO_AES_ECB;
+  ioctl(cipher_context.data.ctx.cryptodev, CIOCGSESSION, (unsigned long)&cipher_context.data.ctx.ses);
+#endif
 }
 
 static dtls_handshake_parameters_t *dtls_handshake_malloc() {

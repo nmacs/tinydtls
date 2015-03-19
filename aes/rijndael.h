@@ -28,7 +28,14 @@
 #ifndef __RIJNDAEL_H
 #define __RIJNDAEL_H
 
+#include "../dtls_config.h"
+
 #include <stdint.h>
+
+#ifdef DTLS_CRYPTODEV
+#include <fcntl.h>
+#include <crypto/cryptodev.h>
+#endif
 
 #define AES_MAXKEYBITS	(256)
 #define AES_MAXKEYBYTES	(AES_MAXKEYBITS/8)
@@ -51,6 +58,12 @@ typedef struct {
 	aes_u32	ek[4*(AES_MAXROUNDS + 1)];	/* encrypt key schedule */
 #ifdef WITH_AES_DECRYPT
 	aes_u32	dk[4*(AES_MAXROUNDS + 1)];	/* decrypt key schedule */
+#endif
+#ifdef DTLS_CRYPTODEV
+	int cryptodev;
+	struct session_op ses;
+	struct crypt_op op;
+	u_char key[AES_MAXKEYBYTES];
 #endif
 } rijndael_ctx;
 
