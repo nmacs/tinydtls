@@ -1436,8 +1436,8 @@ dtls_send_multi(dtls_context_t *ctx, dtls_peer_t *peer,
    * TODO: check if we can use the receive buf here. This would mean
    * that we might not be able to handle multiple records stuffed in
    * one UDP datagram */
-  unsigned char sendbuf[DTLS_MAX_BUF];
-  size_t len = sizeof(sendbuf);
+  unsigned char *sendbuf = ctx->sendbuf;
+  size_t len = sizeof(ctx->sendbuf);
   int res;
   unsigned int i;
   size_t overall_len = 0;
@@ -4105,8 +4105,8 @@ dtls_retransmit(dtls_context_t *context, netq_t *node) {
 
   /* re-initialize timeout when maximum number of retransmissions are not reached yet */
   if (node->retransmit_cnt < DTLS_DEFAULT_MAX_RETRANSMIT) {
-      unsigned char sendbuf[DTLS_MAX_BUF];
-      size_t len = sizeof(sendbuf);
+      unsigned char *sendbuf = context->sendbuf;
+      size_t len = sizeof(context->sendbuf);
       int err;
       unsigned char *data = node->data;
       size_t length = node->length;
