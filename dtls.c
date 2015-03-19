@@ -1542,6 +1542,53 @@ static void dtls_destroy_peer(dtls_context_t *ctx, dtls_peer_t *peer, int unlink
   dtls_free_peer(peer);
 }
 
+static dtls_peer_t* dtls_create_peer(dtls_context_t *ctx, const session_t *session)
+{
+  dtls_peer_t *peer;
+#ifdef WITH_POSIX
+  struct timespec ts;
+  dtls_peer_t *p;
+  dtls_peer_t *kill_peer;
+#endif
+
+#ifdef WITH_POSIX
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+#endif
+
+  peer = dtls_new_peer(session);
+  if (peer) {
+#ifdef WITH_POSIX
+    peer->start = ts.tv_sec;
+#endif
+    return peer;
+  }
+
+#ifdef WITH_POSIX
+  printf("no free peers, try to find victim to kill\n");
+
+  kill_peer = 0;
+  for (p = list_head(ctx->peers); p; p = list_item_next(p)) {
+    if (p->state != DTLS_STATE_CONNECTED || (ctx->keep_peer != 0 && CALL(ctx, keep_peer, p, &p->session) == 0)) {
+      if (ts.tv_sec < p->start || (ts.tv_sec - p->start) > 60) {
+        if (kill_peer == 0 || kill_peer->start > p->start) {
+          kill_peer = p;
+        }
+      }
+    }
+  }
+
+  if (kill_peer) {
+    dtls_dsrv_log_addr(DTLS_LOG_DEBUG, "kill peer", &kill_peer->session);
+    dtls_destroy_peer(ctx, kill_peer, 1);
+    peer = dtls_new_peer(session);
+  }
+  else
+    printf("no victim found\n");
+#endif
+
+  return peer;
+}
+
 /**
  * Checks a received Client Hello message for a valid cookie. When the
  * Client Hello contains no cookie, the function fails and a Hello
@@ -3452,7 +3499,7 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
       /* msg contains a Client Hello with a valid cookie, so we can
        * safely create the server state machine and continue with
        * the handshake. */
-      peer = dtls_new_peer(session);
+      peer = dtls_create_peer(ctx, session);
       if (!peer) {
         dtls_alert("cannot create peer\n");
         return dtls_alert_fatal_create(DTLS_ALERT_INTERNAL_ERROR);
@@ -3927,8 +3974,10 @@ dtls_handle_message(dtls_context_t *ctx,
         dtls_warn("no peer available, send an alert\n");
 
         peer = dtls_new_peer(session);
-        dtls_send_alert(ctx, peer, DTLS_ALERT_LEVEL_FATAL, DTLS_ALERT_CLOSE_NOTIFY);
-        dtls_free_peer(peer);
+        if (peer) {
+          dtls_send_alert(ctx, peer, DTLS_ALERT_LEVEL_FATAL, DTLS_ALERT_CLOSE_NOTIFY);
+          dtls_free_peer(peer);
+        }
 
         // TODO: should we send a alert here?
         return -1;
@@ -4076,9 +4125,9 @@ dtls_connect(dtls_context_t *ctx, const session_t *dst) {
   int res;
 
   peer = dtls_get_peer(ctx, dst);
-  
+
   if (!peer)
-    peer = dtls_new_peer(dst);
+    peer = dtls_create_peer(ctx, dst);
 
   if (!peer) {
     dtls_crit("cannot create new peer\n");

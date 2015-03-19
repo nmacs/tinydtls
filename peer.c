@@ -27,8 +27,14 @@
 #include "peer.h"
 #include "debug.h"
 
+#ifndef DTLS_PEER_MAX
+#define DTLS_PEER_MAX 3
+#endif
+
+static int peers_count = 0;
+
 #ifndef WITH_CONTIKI
-void peer_init()
+void peer_init(void)
 {
 }
 
@@ -43,6 +49,10 @@ dtls_free_peer(dtls_peer_t *peer) {
   dtls_security_free(peer->security_params[0]);
   dtls_security_free(peer->security_params[1]);
   free(peer);
+
+  if (peers_count > 0) {
+    peers_count--;
+  }
 }
 #else /* WITH_CONTIKI */
 
@@ -72,6 +82,10 @@ dtls_peer_t *
 dtls_new_peer(const session_t *session) {
   dtls_peer_t *peer;
 
+  if (peers_count >= DTLS_PEER_MAX) {
+    return 0;
+  }
+
   peer = dtls_malloc_peer();
   if (peer) {
     memset(peer, 0, sizeof(dtls_peer_t));
@@ -84,6 +98,8 @@ dtls_new_peer(const session_t *session) {
     }
 
     dtls_dsrv_log_addr(DTLS_LOG_DEBUG, "dtls_new_peer", session);
+
+    ++peers_count;
   }
 
   return peer;

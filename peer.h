@@ -60,6 +60,10 @@ typedef struct dtls_peer_t {
   struct dtls_peer_t *next;
 #endif /* WITH_CONTIKI */
 
+#ifdef WITH_POSIX
+  time_t start;
+#endif
+
   session_t session;	     /**< peer address and local interface */
 
   dtls_peer_type role;       /**< denotes if this host is DTLS_CLIENT or DTLS_SERVER */
@@ -123,7 +127,7 @@ static inline void dtls_security_params_switch(dtls_peer_t *peer)
   peer->security_params[0] = security;
 }
 
-void peer_init();
+void peer_init(void);
 
 /**
  * Creates a new peer for given @p session. The current configuration
