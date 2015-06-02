@@ -30,6 +30,16 @@ struct dtls_x509_t
 	uint8_t pub_y[32];
 };
 
+static inline const char* dtls_x509_get_common_name(const struct dtls_x509_t* ctx)
+{
+	return ctx->cert_dn[X509_COMMON_NAME];
+}
+
+static inline const char* dtls_x509_get_access_level(const struct dtls_x509_t* ctx)
+{
+	return ctx->cert_dn[X509_ACCESS_LEVEL];
+}
+
 int dtls_x509_parse(struct dtls_x509_t *ctx, const uint8_t *cert, int *len);
 void x509_print(const struct dtls_x509_t *cert);
 

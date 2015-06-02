@@ -136,8 +136,8 @@ void dtls_x509_print(const struct dtls_x509_t *cert)
     printf("%s\n", cert->ca_cert_dn[X509_ORGANIZATIONAL_UNIT][0] ?
         cert->ca_cert_dn[X509_ORGANIZATIONAL_UNIT] : not_part_of_cert);
 
-    printf("Not Before:\t\t\t%s", ctime(&cert->not_before));
-    printf("Not After:\t\t\t%s", ctime(&cert->not_after));
+    //printf("Not Before:\t\t\t%s", ctime(&cert->not_before));
+    //printf("Not After:\t\t\t%s", ctime(&cert->not_after));
     printf("Sig Type:\t\t\t");
     switch (cert->sig_type)
     {
