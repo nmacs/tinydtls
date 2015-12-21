@@ -39,7 +39,7 @@ void peer_init(void)
 }
 
 static inline dtls_peer_t *
-dtls_malloc_peer() {
+dtls_malloc_peer(void) {
   return (dtls_peer_t *)malloc(sizeof(dtls_peer_t));
 }
 
@@ -91,6 +91,7 @@ dtls_new_peer(const session_t *session) {
     memset(peer, 0, sizeof(dtls_peer_t));
     memcpy(&peer->session, session, sizeof(session_t));
     peer->security_params[0] = dtls_security_new();
+    peer->have_cert = 0;
 
     if (!peer->security_params[0]) {
       dtls_free_peer(peer);

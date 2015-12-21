@@ -29,7 +29,16 @@
 /* #include <sys/param.h> */
 /* #include <sys/systm.h> */
 
+#ifdef __nuttx__
+#  include <nuttx/config.h>
+#endif
+
 #include "rijndael.h"
+
+#ifdef DTLS_CRYPTODEV
+#  include <sys/ioctl.h>
+#  include <string.h>
+#endif
 
 #undef FULL_UNROLL
 
@@ -1250,7 +1259,7 @@ rijndael_set_key_enc_only(rijndael_ctx *ctx, const u_char *key, int bits)
 		return -1;
 
 	memcpy(ctx->key, key, bits / 8);
-	ctx->ses.key = ctx->key;
+	ctx->ses.key = (caddr_t)ctx->key;
 	ctx->ses.keylen = bits / 8;
 #endif
 
@@ -1312,13 +1321,13 @@ rijndael_encrypt(rijndael_ctx *ctx, const u_char *src, u_char *dst)
 #ifndef DTLS_CRYPTODEV
 	rijndaelEncrypt(ctx->ek, ctx->Nr, src, dst);
 #else
-	int ret;
 	ctx->op.ses = ctx->ses.ses;
 	ctx->op.src = (caddr_t)src;
 	ctx->op.dst = (caddr_t)dst;
 	ctx->op.len = 16;
 	ctx->op.iv  = 0;
 	ctx->op.op  = COP_ENCRYPT;
-	ret = ioctl(ctx->cryptodev, CIOCCRYPT, (unsigned long)&ctx->op);
+
+	ioctl(ctx->cryptodev, CIOCCRYPT, (unsigned long)&ctx->op);
 #endif
 }

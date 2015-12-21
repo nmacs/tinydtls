@@ -131,6 +131,8 @@ typedef struct {
 
   int (*keep_peer)(struct dtls_context_t *ctx, const session_t *session);
 
+  int (*require_client_auth)(struct dtls_context_t *ctx, const session_t *session);
+
 #ifdef DTLS_PSK
   /**
    * Called during handshake to get information related to the
@@ -227,7 +229,7 @@ typedef struct {
 
   int (*verify_ecdsa_cert)(struct dtls_context_t *ctx,
 			   const session_t *session,
-			   const struct dtls_peer_t *cert,
+			   const struct dtls_x509_t *cert,
 			   const unsigned char **ca_pub_x,
 			   const unsigned char **ca_pub_y);
 #endif /* DTLS_X509 */
@@ -253,6 +255,7 @@ typedef struct dtls_context_t {
 
   dtls_handler_t *h;		/**< callback handlers */
 
+  int client_auth_required;
   unsigned char readbuf[DTLS_MAX_BUF];
   unsigned char sendbuf[DTLS_MAX_BUF];
 } dtls_context_t;
@@ -261,7 +264,7 @@ typedef struct dtls_context_t {
  * This function initializes the tinyDTLS memory management and must
  * be called first.
  */
-void dtls_init();
+void dtls_init(void);
 
 /** 
  * Creates a new context object. The storage allocated for the new
@@ -270,6 +273,9 @@ dtls_context_t *dtls_new_context(void *app_data);
 
 /** Releases any storage that has been allocated for \p ctx. */
 void dtls_free_context(dtls_context_t *ctx);
+
+/** Releases all peers that has been allocated for \p ctx. */
+void dtls_destroy_all_peers(dtls_context_t *ctx);
 
 #define dtls_set_app_data(CTX,DATA) ((CTX)->app = (DATA))
 #define dtls_get_app_data(CTX) ((CTX)->app)

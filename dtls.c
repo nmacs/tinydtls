@@ -28,6 +28,7 @@
 #include "dtls_config.h"
 #include "dtls_time.h"
 
+#include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
 #ifdef HAVE_ASSERT_H
@@ -149,7 +150,7 @@ free_context(dtls_context_t *context) {
 #else /* WITH_CONTIKI */
 
 static inline dtls_context_t *
-malloc_context() {
+malloc_context(void) {
   return (dtls_context_t *)malloc(sizeof(dtls_context_t));
 }
 
@@ -160,7 +161,7 @@ free_context(dtls_context_t *context) {
 #endif
 
 void
-dtls_init() {
+dtls_init(void) {
   dtls_clock_init();
   crypto_init();
   netq_init();
@@ -516,6 +517,12 @@ static inline int is_ecdsa_client_auth_supported(dtls_context_t *ctx)
 #else
   return 0;
 #endif /* DTLS_ECC */
+}
+
+static inline int is_ecdsa_client_auth_required(dtls_context_t *ctx)
+{
+  return is_ecdsa_client_auth_supported(ctx) &&
+         (ctx->h->require_client_auth == 0 || ctx->h->require_client_auth(ctx, 0));
 }
 
 /**
@@ -1947,7 +1954,7 @@ dtls_send_certificate_ecdsa(dtls_context_t *ctx, dtls_peer_t *peer,
   uint8 buf[300];
   uint8 *p;
   int ret;
-  unsigned char *cert;
+  const unsigned char *cert;
   size_t cert_size;
 
   ret = CALL(ctx, get_ecdsa_cert, &peer->session,
@@ -2221,7 +2228,7 @@ dtls_send_server_hello_msgs(dtls_context_t *ctx, dtls_peer_t *peer)
     }
 
     if (is_tls_ecdhe_ecdsa_with_aes_128_ccm_8(peer->handshake_params->cipher) &&
-	is_ecdsa_client_auth_supported(ctx)) {
+	is_ecdsa_client_auth_required(ctx)) {
       res = dtls_send_server_certificate_request(ctx, peer);
 
       if (res < 0) {
@@ -2784,7 +2791,6 @@ check_server_certificate(dtls_context_t *ctx,
   unsigned char sha256hash[DTLS_HMAC_DIGEST_SIZE];
   const unsigned char *ca_pub_x;
   const unsigned char *ca_pub_y;
-  size_t signature_size;
 	struct dtls_x509_t *cert = &peer->cert;
 
   update_hs_hash(peer, data, data_length);
@@ -2810,7 +2816,6 @@ check_server_certificate(dtls_context_t *ctx,
   if (ret < 0) {
     return dtls_alert_fatal_create(DTLS_ALERT_DECODE_ERROR);
   }
-  signature_size = (size_t)ret;
 
   ret = dtls_x509_parse(cert, data, &cert_length);
   if (ret < 0) {
@@ -3304,7 +3309,8 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
   case DTLS_HT_CERTIFICATE:
 
     if ((role == DTLS_CLIENT && state != DTLS_STATE_WAIT_SERVERCERTIFICATE) ||
-        (role == DTLS_SERVER && state != DTLS_STATE_WAIT_CLIENTCERTIFICATE)) {
+        (role == DTLS_SERVER && state != DTLS_STATE_WAIT_CLIENTCERTIFICATE  && (is_ecdsa_client_auth_required(ctx) || state != DTLS_STATE_WAIT_CLIENTKEYEXCHANGE)))
+    {
       return dtls_alert_fatal_create(DTLS_ALERT_UNEXPECTED_MESSAGE);
     }
 
@@ -3318,6 +3324,7 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
     } else if (role == DTLS_SERVER){
       peer->state = DTLS_STATE_WAIT_CLIENTKEYEXCHANGE;
     }
+    peer->have_cert = 1;
     /* update_hs_hash(peer, data, data_length); */
 
     break;
@@ -3440,7 +3447,7 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
     update_hs_hash(peer, data, data_length);
 
     if (is_tls_ecdhe_ecdsa_with_aes_128_ccm_8(peer->handshake_params->cipher) &&
-	is_ecdsa_client_auth_supported(ctx))
+	is_ecdsa_client_auth_required(ctx))
       peer->state = DTLS_STATE_WAIT_CERTIFICATEVERIFY;
     else
       peer->state = DTLS_STATE_WAIT_CHANGECIPHERSPEC;
@@ -3546,8 +3553,9 @@ handle_handshake_msg(dtls_context_t *ctx, dtls_peer_t *peer, session_t *session,
     if (err < 0) {
       return err;
     }
+
     if (is_tls_ecdhe_ecdsa_with_aes_128_ccm_8(peer->handshake_params->cipher) &&
-	is_ecdsa_client_auth_supported(ctx))
+	is_ecdsa_client_auth_required(ctx))
       peer->state = DTLS_STATE_WAIT_CLIENTCERTIFICATE;
     else
       peer->state = DTLS_STATE_WAIT_CLIENTKEYEXCHANGE;
@@ -3870,7 +3878,7 @@ dtls_handle_message(dtls_context_t *ctx,
     if (peer) {
       data_length = decrypt_verify(peer, msg, rlen, &data);
       if (data_length < 0) {
-	int err =  dtls_alert_fatal_create(DTLS_ALERT_DECRYPT_ERROR);
+	 err =  dtls_alert_fatal_create(DTLS_ALERT_DECRYPT_ERROR);
         dtls_info("decrypt_verify() failed\n");
 	if (peer->state < DTLS_STATE_CONNECTED) {
 	  dtls_alert_send_from_err(ctx, peer, &peer->session, err);
@@ -4002,7 +4010,11 @@ dtls_new_context(void *app_data) {
   dtls_context_t *c;
   dtls_tick_t now;
 #ifndef WITH_CONTIKI
+#ifdef __nuttx__
   FILE *urandom = fopen("/dev/random", "r");
+#else
+  FILE *urandom = fopen("/dev/urandom", "r");
+#endif
   unsigned char buf[sizeof(unsigned long)];
 #endif /* WITH_CONTIKI */
 
@@ -4049,7 +4061,7 @@ dtls_new_context(void *app_data) {
     c->cookie_secret_age = now;
   else 
     goto error;
-  
+
   return c;
 
  error:
@@ -4057,6 +4069,28 @@ dtls_new_context(void *app_data) {
   if (c)
     dtls_free_context(c);
   return NULL;
+}
+
+void
+dtls_destroy_all_peers(dtls_context_t *ctx) {
+  dtls_peer_t *p;
+
+  if (!ctx) {
+    return;
+  }
+
+#ifndef WITH_CONTIKI
+  dtls_peer_t *tmp;
+
+  if (ctx->peers) {
+    HASH_ITER(hh, ctx->peers, p, tmp) {
+      dtls_destroy_peer(ctx, p, 1);
+    }
+  }
+#else /* WITH_CONTIKI */
+  for (p = list_head(ctx->peers); p; p = list_item_next(p))
+    dtls_destroy_peer(ctx, p, 1);
+#endif /* WITH_CONTIKI */
 }
 
 void

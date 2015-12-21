@@ -33,6 +33,8 @@
 #include "x509.h"
 #include "asn1.h"
 
+#include <stdio.h>
+
 /**
  * Construct a new x509 object.
  * @return 0 if ok. < 0 if there was a problem.

@@ -39,11 +39,11 @@
 #define MASK_L(_L) ((1 << 8 * _L) - 1)
 
 #define SET_COUNTER(A,L,cnt,C) {					\
-    int i;								\
+    int i_;								\
     memset((A) + DTLS_CCM_BLOCKSIZE - (L), 0, (L));			\
     (C) = (cnt) & MASK_L(L);						\
-    for (i = DTLS_CCM_BLOCKSIZE - 1; (C) && (i > (L)); --i, (C) >>= 8)	\
-      (A)[i] |= (C) & 0xFF;						\
+    for (i_ = DTLS_CCM_BLOCKSIZE - 1; (C) && (i_ > (L)); --i_, (C) >>= 8)	\
+      (A)[i_] |= (C) & 0xFF;						\
   }
 
 static inline void 

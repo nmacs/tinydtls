@@ -603,6 +603,12 @@ int ecc_ecdsa_validate(const uint32_t *x, const uint32_t *y, const uint32_t *e, 
 	uint32_t tmp3_x[8];
 	uint32_t tmp3_y[8];
 
+	/*
+	 * BUG: if s is all zeroes fieldInv will hang.
+	 */
+	if (*s == 0)
+	  return -1;
+
 	// 3. Calculate w = s^{-1} \pmod{n}
 	fieldInv(s, ecc_order_m, ecc_order_r, w);
 

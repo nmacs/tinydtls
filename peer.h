@@ -73,6 +73,7 @@ typedef struct dtls_peer_t {
   dtls_handshake_parameters_t *handshake_params;
 
 #ifdef DTLS_X509
+  int have_cert;
   struct dtls_x509_t cert;
 #endif
 
